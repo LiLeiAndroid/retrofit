@@ -120,13 +120,13 @@ public class RestAdapter {
   private final RequestHeaders requestHeaders;
   private final Converter converter;
   private final Profiler profiler;
-  private final ErrorHandler errorHandler;
+  private final FallbackHandler fallbackHandler;
   private final Log log;
   private volatile boolean debug;
 
   private RestAdapter(Server server, Client.Provider clientProvider, Executor httpExecutor,
       Executor callbackExecutor, RequestHeaders requestHeaders, Converter converter,
-      Profiler profiler, ErrorHandler errorHandler, Log log, boolean debug) {
+      Profiler profiler, FallbackHandler fallbackHandler, Log log, boolean debug) {
     this.server = server;
     this.clientProvider = clientProvider;
     this.httpExecutor = httpExecutor;
@@ -134,7 +134,7 @@ public class RestAdapter {
     this.requestHeaders = requestHeaders;
     this.converter = converter;
     this.profiler = profiler;
-    this.errorHandler = errorHandler;
+    this.fallbackHandler = fallbackHandler;
     this.log = log;
     this.debug = debug;
   }
@@ -172,6 +172,9 @@ public class RestAdapter {
         RestMethodInfo tempMethodDetails = methodDetailsCache.get(method);
         if (tempMethodDetails == null) {
           tempMethodDetails = new RestMethodInfo(method);
+          if (tempMethodDetails.fallbackHandler == null) {
+            tempMethodDetails.fallbackHandler = fallbackHandler;
+          }
           methodDetailsCache.put(method, tempMethodDetails);
         }
         methodDetails = tempMethodDetails;
@@ -181,7 +184,8 @@ public class RestAdapter {
         try {
           return invokeRequest(methodDetails, args);
         } catch (RetrofitError error) {
-          return errorHandler.propagateOrFallback(error, method);
+          return methodDetails.fallbackHandler
+                              .fallbackOrPropagate(methodDetails.responseObjectType, error);
         }
       }
 
@@ -406,7 +410,7 @@ public class RestAdapter {
     private RequestHeaders requestHeaders;
     private Converter converter;
     private Profiler profiler;
-    private ErrorHandler errorHandler;
+    private FallbackHandler fallbackHandler;
     private Log log;
     private boolean debug;
 
@@ -477,9 +481,9 @@ public class RestAdapter {
       return this;
     }
 
-    public Builder setErrorHandler(ErrorHandler errorHandler) {
-      if (errorHandler == null) throw new NullPointerException("error handler cannot be null");
-      this.errorHandler = errorHandler;
+    public Builder setFallbackHandler(FallbackHandler fallbackHandler) {
+      if (fallbackHandler == null) throw new NullPointerException("error handler cannot be null");
+      this.fallbackHandler = fallbackHandler;
       return this;
     }
 
@@ -503,7 +507,7 @@ public class RestAdapter {
       }
       ensureSaneDefaults();
       return new RestAdapter(server, clientProvider, httpExecutor, callbackExecutor, requestHeaders,
-          converter, profiler, errorHandler, log, debug);
+          converter, profiler, fallbackHandler, log, debug);
     }
 
     private void ensureSaneDefaults() {
@@ -519,8 +523,8 @@ public class RestAdapter {
       if (callbackExecutor == null) {
         callbackExecutor = Platform.get().defaultCallbackExecutor();
       }
-      if (errorHandler == null) {
-        errorHandler = ErrorHandler.DEFAULT;
+      if (fallbackHandler == null) {
+        fallbackHandler = FallbackHandler.DEFAULT;
       }
       if (log == null) {
         log = Platform.get().defaultLog();

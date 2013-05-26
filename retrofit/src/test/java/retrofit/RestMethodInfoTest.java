@@ -11,21 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
-import retrofit.http.Body;
-import retrofit.http.DELETE;
-import retrofit.http.Field;
-import retrofit.http.FormUrlEncoded;
-import retrofit.http.GET;
-import retrofit.http.HEAD;
-import retrofit.http.Header;
-import retrofit.http.Headers;
-import retrofit.http.Multipart;
-import retrofit.http.POST;
-import retrofit.http.PUT;
-import retrofit.http.Part;
-import retrofit.http.Path;
-import retrofit.http.Query;
-import retrofit.http.RestMethod;
+import retrofit.http.*;
 import retrofit.mime.TypedOutput;
 
 import static java.lang.annotation.ElementType.METHOD;
@@ -437,7 +423,7 @@ public class RestMethodInfoTest {
     assertThat(methodInfo.requestUrlParam).containsOnly(new String[] { null });
     assertThat(methodInfo.requestQueryName).containsOnly(new String[] { null });
     assertThat(methodInfo.requestFormFields).containsOnly(new String[] { null });
-    assertThat(methodInfo.requestMultipartPart).containsOnly(new String[] { null });
+    assertThat(methodInfo.requestMultipartPart).containsOnly(new String[]{null});
     assertThat(methodInfo.bodyIndex).isEqualTo(0);
     assertThat(methodInfo.requestType).isEqualTo(SIMPLE);
   }
@@ -721,6 +707,47 @@ public class RestMethodInfoTest {
     class Example {
       @GET("/")
       Response a(@Header("a") TypedOutput a, @Header("b") int b) {
+        return null;
+      }
+    }
+
+    Method method = TestingUtils.getMethod(Example.class, "a");
+    RestMethodInfo methodInfo = new RestMethodInfo(method);
+    methodInfo.init();
+  }
+
+  static class MyFallback implements FallbackHandler {
+    public Object fallbackOrPropagate(Type type, RetrofitError error) throws Throwable {
+      return null;
+    }
+  }
+
+  @Test public void fallbackHandlerViaFallbackAnnotation() {
+
+    class Example {
+      @GET("/") @Fallback(MyFallback.class) Response a() {
+        return null;
+      }
+    }
+
+    Method method = TestingUtils.getMethod(Example.class, "a");
+    RestMethodInfo methodInfo = new RestMethodInfo(method);
+    methodInfo.init();
+
+    assertThat(methodInfo.fallbackHandler).isInstanceOf(MyFallback.class);
+  }
+
+  @Test(expected = RuntimeException.class)
+  public void fallbackMustBePossibleToInstantiate() {
+    class MyFallback implements FallbackHandler {
+      MyFallback() { throw new Error(); }
+      public Object fallbackOrPropagate(Type type, RetrofitError error) throws Throwable {
+        return null;
+      }
+    }
+
+    class Example {
+      @GET("/") @Fallback(MyFallback.class) Response a() {
         return null;
       }
     }

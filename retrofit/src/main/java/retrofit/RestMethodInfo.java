@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import retrofit.http.Body;
+import retrofit.http.Fallback;
 import retrofit.http.Field;
 import retrofit.http.FormUrlEncoded;
 import retrofit.http.Header;
@@ -69,6 +70,7 @@ final class RestMethodInfo {
   Set<String> requestUrlParamNames;
   String requestQuery;
   List<retrofit.client.Header> headers;
+  FallbackHandler fallbackHandler;
 
   // Parameter-level details
   String[] requestUrlParam;
@@ -135,6 +137,19 @@ final class RestMethodInfo {
           throw new IllegalStateException("Headers annotation was empty.");
         }
         headers = parseHeaders(headersToParse);
+      } else if (annotationType == Fallback.class) {
+        Class<? extends FallbackHandler> fallbackClass = ((Fallback) methodAnnotation).value();
+        try {
+          fallbackHandler = fallbackClass.newInstance();
+        } catch (Exception e) {
+          throw new RuntimeException("Failed to instantiate "
+              + fallbackClass
+              + " set via "
+              + annotationType.getSimpleName()
+              + " annotation on "
+              + method.getName()
+              + ".", e);
+        }
       } else if (annotationType == Multipart.class) {
         if (requestType != RequestType.SIMPLE) {
           throw new IllegalStateException(

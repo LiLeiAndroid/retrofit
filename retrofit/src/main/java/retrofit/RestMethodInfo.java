@@ -26,6 +26,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import retrofit.transform.Transform;
+import retrofit.transform.Transformer;
 import retrofit.http.Body;
 import retrofit.http.Field;
 import retrofit.http.FormUrlEncoded;
@@ -69,6 +72,8 @@ final class RestMethodInfo {
   Set<String> requestUrlParamNames;
   String requestQuery;
   List<retrofit.client.Header> headers;
+  Transformer transformer;
+  Type transformFromType;
 
   // Parameter-level details
   String[] requestUrlParam;
@@ -129,6 +134,21 @@ final class RestMethodInfo {
         parsePath(path);
         requestMethod = methodInfo.value();
         requestHasBody = methodInfo.hasBody();
+      } else if (annotationType == Transform.class) {
+        Class<? extends Transformer> transformerClass = //
+            ((Transform) methodAnnotation).value();
+        transformFromType =  ((ParameterizedType) transformerClass.getGenericInterfaces()[0]).getActualTypeArguments()[0];
+        try {
+          transformer = transformerClass.newInstance();
+        } catch (Exception e) {
+          throw new RuntimeException("Failed to instantiate "
+              + transformerClass
+              + " set via "
+              + annotationType.getSimpleName()
+              + " annotation on "
+              + method.getName()
+              + ".", e);
+        }
       } else if (annotationType == Headers.class) {
         String[] headersToParse = ((Headers) methodAnnotation).value();
         if (headersToParse.length == 0) {

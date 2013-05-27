@@ -2,6 +2,7 @@
 package retrofit;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -14,6 +15,9 @@ import retrofit.client.Header;
 import retrofit.client.Request;
 import retrofit.client.Response;
 import retrofit.mime.TypedString;
+import retrofit.transform.Transform;
+import retrofit.transform.TransformationException;
+import retrofit.transform.Transformer;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 import static org.fest.assertions.api.Assertions.fail;
@@ -35,9 +39,17 @@ public class RestAdapterTest {
 
   private interface Example {
     @GET("/") Object something();
+    @GET("/") @Transform(ToList.class) List<Object> transform();
     @GET("/") void something(Callback<Object> callback);
     @GET("/") Response direct();
     @GET("/") void direct(Callback<Response> callback);
+  }
+
+  static class ToList implements Transformer<Object> {
+    @Override
+    public Object transform(Response response, Object fromConverter, Type to) throws TransformationException {
+      return Collections.singletonList(fromConverter);
+    }
   }
 
   private Client mockClient;
@@ -79,6 +91,16 @@ public class RestAdapterTest {
     verify(mockProfiler).beforeCall();
     verify(mockClient).execute(any(Request.class));
     verify(mockProfiler).afterCall(any(RequestInformation.class), anyInt(), eq(200), same(data));
+  }
+
+  @Test public void transform() throws Exception {
+    Object data = new Object();
+    when(mockProfiler.beforeCall()).thenReturn(data);
+    when(mockClient.execute(any(Request.class))) //
+        .thenReturn(new Response(200, "OK", NO_HEADERS, new TypedString("{}")));
+
+    List<Object> objects = example.transform();
+    assertThat(objects.size()).isEqualTo(1);
   }
 
   @Test public void synchronousDoesNotUseExecutors() throws Exception {

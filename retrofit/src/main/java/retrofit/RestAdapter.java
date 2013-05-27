@@ -36,6 +36,7 @@ import retrofit.mime.MimeUtil;
 import retrofit.mime.TypedByteArray;
 import retrofit.mime.TypedInput;
 import retrofit.mime.TypedOutput;
+import retrofit.transform.TransformationException;
 
 /**
  * Adapts a Java interface to a REST API.
@@ -269,18 +270,32 @@ public class RestAdapter {
           if (body == null) {
             return new ResponseWrapper(response, null);
           }
+
+          if (methodDetails.transformer != null)
+            type = methodDetails.transformFromType;
+          Object output;
           try {
-            Object convert = converter.fromBody(body, type);
-            if (methodDetails.isSynchronous) {
-              return convert;
-            }
-            return new ResponseWrapper(response, convert);
+            output = converter.fromBody(body, type);
           } catch (ConversionException e) {
             // The response body was partially read by the converter. Replace it with null.
             response = Utils.replaceResponseBody(response, null);
 
             throw RetrofitError.conversionError(url, response, converter, type, e);
           }
+          if (methodDetails.transformer != null) {
+            type = methodDetails.responseObjectType;
+            try {
+              output = methodDetails.transformer.transform(response, output, type);
+            } catch (TransformationException e) {
+              // TODO: decide whether to retrofit RetrofitError to decorate in transformation
+              throw RetrofitError.unexpectedError(url, e);
+            }
+          }
+
+          if (methodDetails.isSynchronous) {
+            return output;
+          }
+          return new ResponseWrapper(response, output);
         }
 
         response = Utils.readBodyToBytesIfNecessary(response);
